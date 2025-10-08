@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const { testConnection, initializeDatabase, insertSampleData } = require('./config/database');
+const { testConnection, initializeDatabase, insertSampleData, pool } = require('./config/database');
 
 // Load environment variables
 dotenv.config({ path: __dirname + '/.env' });
@@ -23,8 +23,8 @@ app.use(helmet({
 
 // CORS configuration - Updated for Render deployment
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'https://your-frontend.onrender.com',
-  'https://your-frontend.onrender.com',
+  process.env.FRONTEND_URL || 'http://padidekhoy.ir',
+  'http://padidekhoy.ir',
   // Add your actual frontend URL when you have it
 ];
 
@@ -127,6 +127,37 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'E-commerce API is running' });
 });
 
+// Database connection test endpoint
+app.get('/api/test-db', async (req, res) => {
+  try {
+    console.log('Database test endpoint hit');
+    
+    // Try to get a connection from the pool
+    const connection = await pool.getConnection();
+    console.log('✅ Database connection established');
+    
+    // Run a simple query
+    const [rows] = await connection.execute('SELECT 1 as test');
+    console.log('✅ Simple query executed');
+    
+    // Release the connection
+    connection.release();
+    
+    res.json({ 
+      status: 'success', 
+      message: 'Database connection is working properly',
+      testResult: rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Database test failed:', error.message);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Database connection failed',
+      error: error.message
+    });
+  }
+});
+
 // Serve a simple frontend page
 app.get('/', (req, res) => {
   res.send(`
@@ -141,7 +172,7 @@ app.get('/', (req, res) => {
         <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
             <h1>E-commerce Backend API</h1>
             <p>Your backend API is running successfully!</p>
-            <p>API Documentation: <a href="/api/health">Health Check</a></p>
+            <p><a href="/api/health">Health Check</a> | <a href="/api/test-db">Database Test</a></p>
             <p>Make sure to set up your database connection in Render environment variables.</p>
         </div>
     </body>
