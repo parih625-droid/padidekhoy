@@ -114,14 +114,8 @@ console.log('Mounting categories routes');
 app.use('/api/categories', require('./routes/categories'));
 console.log('Categories routes mounted');
 
-// Add logging before mounting orders routes
 console.log('Mounting orders routes');
-app.use('/api/orders', (req, res, next) => {
-  console.log('Orders route middleware hit - URL:', req.url, 'Method:', req.method);
-  console.log('Full URL:', req.originalUrl);
-  console.log('Headers:', req.headers);
-  next();
-}, require('./routes/orders'));
+app.use('/api/orders', require('./routes/orders'));
 console.log('Orders routes mounted');
 
 console.log('Mounting cart routes');

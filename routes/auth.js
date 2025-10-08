@@ -48,10 +48,10 @@ router.post('/login', [
 ], authController.login);
 
 // Get profile (protected route)
-router.get('/profile', auth, authController.getProfile);
+router.get('/profile', auth.authenticateToken, authController.getProfile);
 
 // Update profile (protected route)
-router.put('/profile', auth, [
+router.put('/profile', auth.authenticateToken, [
   body('name')
     .optional()
     .isLength({ min: 2, max: 50 })
@@ -69,7 +69,7 @@ router.put('/profile', auth, [
 ], authController.updateProfile);
 
 // Change password (protected route)
-router.put('/change-password', auth, [
+router.put('/change-password', auth.authenticateToken, [
   body('currentPassword')
     .notEmpty()
     .withMessage('Current password is required'),
@@ -81,6 +81,6 @@ router.put('/change-password', auth, [
 ], authController.changePassword);
 
 // Verify token (protected route)
-router.get('/verify', auth, authController.verifyToken);
+router.get('/verify', auth.authenticateToken, authController.verifyToken);
 
 module.exports = router;

@@ -2,7 +2,7 @@ const express = require('express');
 const { body, param } = require('express-validator');
 const { validationResult } = require('express-validator');
 const Category = require('../models/Category');
-const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
+const auth = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -143,8 +143,8 @@ router.get('/', getAllCategories);
 router.get('/:id', paramIdValidation, getCategoryById);
 
 // Admin routes
-router.post('/', authenticateToken, authorizeAdmin, categoryValidation, createCategory);
-router.put('/:id', authenticateToken, authorizeAdmin, paramIdValidation, categoryValidation, updateCategory);
-router.delete('/:id', authenticateToken, authorizeAdmin, paramIdValidation, deleteCategory);
+router.post('/', auth.authenticateToken, auth.authorizeAdmin, categoryValidation, createCategory);
+router.put('/:id', auth.authenticateToken, auth.authorizeAdmin, paramIdValidation, categoryValidation, updateCategory);
+router.delete('/:id', auth.authenticateToken, auth.authorizeAdmin, paramIdValidation, deleteCategory);
 
 module.exports = router;

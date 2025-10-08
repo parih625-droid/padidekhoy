@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, param } = require('express-validator');
 const orderController = require('../controllers/orderController');
-const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
+const auth = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -55,21 +55,21 @@ const paramIdValidation = [
 ];
 
 // Admin routes (specific endpoints to avoid conflicts)
-router.get('/admin/all', authenticateToken, authorizeAdmin, orderController.getAllOrders);
+router.get('/admin/all', auth.authenticateToken, auth.authorizeAdmin, orderController.getAllOrders);
 
-router.get('/admin/dashboard-stats', authenticateToken, authorizeAdmin, orderController.getDashboardStats);
+router.get('/admin/dashboard-stats', auth.authenticateToken, auth.authorizeAdmin, orderController.getDashboardStats);
 
 // Customer routes - ORDER MATTERS! Specific routes before parameterized ones
-router.post('/', authenticateToken, createOrderValidation, orderController.createOrder);
-router.get('/my-orders', authenticateToken, orderController.getMyOrders);
+router.post('/', auth.authenticateToken, createOrderValidation, orderController.createOrder);
+router.get('/my-orders', auth.authenticateToken, orderController.getMyOrders);
 
 // Payment routes
-router.post('/payment/initialize', authenticateToken, paymentValidation, orderController.initializePayment);
+router.post('/payment/initialize', auth.authenticateToken, paymentValidation, orderController.initializePayment);
 router.get('/payment/verify', orderController.verifyPayment);
 
 // Parameterized routes should come last
-router.put('/:id/status', authenticateToken, authorizeAdmin, paramIdValidation, updateStatusValidation, orderController.updateOrderStatus);
-router.delete('/:id', authenticateToken, authorizeAdmin, paramIdValidation, orderController.deleteOrder);
-router.get('/:id', authenticateToken, paramIdValidation, orderController.getOrderById);
+router.put('/:id/status', auth.authenticateToken, auth.authorizeAdmin, paramIdValidation, updateStatusValidation, orderController.updateOrderStatus);
+router.delete('/:id', auth.authenticateToken, auth.authorizeAdmin, paramIdValidation, orderController.deleteOrder);
+router.get('/:id', auth.authenticateToken, paramIdValidation, orderController.getOrderById);
 
 module.exports = router;

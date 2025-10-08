@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, param } = require('express-validator');
 const productController = require('../controllers/productController');
-const { authenticateToken, authorizeAdmin, optionalAuth } = require('../middleware/auth');
+const auth = require('../middleware/auth');
 const { upload, handleMulterError } = require('../middleware/upload');
 
 const router = express.Router();
@@ -85,8 +85,8 @@ router.get('/:id', paramIdValidation, productController.getProductById);
 
 // Admin routes
 router.post('/', 
-  authenticateToken, 
-  authorizeAdmin, 
+  auth.authenticateToken, 
+  auth.authorizeAdmin, 
   upload.array('images', 5), // Allow up to 5 images
   handleMulterError,
   productValidation, 
@@ -94,8 +94,8 @@ router.post('/',
 );
 
 router.put('/:id', 
-  authenticateToken, 
-  authorizeAdmin, 
+  auth.authenticateToken, 
+  auth.authorizeAdmin, 
   paramIdValidation,
   upload.array('images', 5), // Allow up to 5 images
   handleMulterError,
@@ -104,8 +104,8 @@ router.put('/:id',
 );
 
 router.delete('/:id', 
-  authenticateToken, 
-  authorizeAdmin, 
+  auth.authenticateToken, 
+  auth.authorizeAdmin, 
   paramIdValidation,
   productController.deleteProduct
 );
