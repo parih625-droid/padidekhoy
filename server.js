@@ -9,9 +9,10 @@ const { testConnection, initializeDatabase, insertSampleData } = require('./conf
 // Load environment variables
 dotenv.config({ path: __dirname + '/.env' });
 console.log('Environment variables loaded:');
-console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Loaded' : 'Not loaded');
-console.log('DB_HOST:', process.env.DB_HOST);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT:', process.env.PORT);
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Loaded' : 'Not loaded');
 
 const app = express();
 
@@ -22,16 +23,9 @@ app.use(helmet({
 
 // CORS configuration - Updated for Render deployment
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
-  'http://localhost:5173',
-  'http://localhost:5174', 
-  'http://localhost:5175',
-  'http://localhost:5176',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:3000',
-  // Add your Render frontend URL here when you have it
-  'https://your-frontend-url.onrender.com'
+  process.env.FRONTEND_URL || 'https://your-frontend.onrender.com',
+  'https://your-frontend.onrender.com',
+  // Add your actual frontend URL when you have it
 ];
 
 app.use(cors({
@@ -68,23 +62,23 @@ app.use((req, res, next) => {
   }
 });
 
-// Rate limiting - Disabled for development
-// const limiter = rateLimit({
-//   windowMs: 1 * 60 * 1000, // 1 minute
-//   max: 1000, // 1000 requests per minute for development
-//   message: {
-//     error: 'Too many requests from this IP, please try again later.',
-//     retryAfter: 60 // 1 minute in seconds
-//   },
-//   standardHeaders: true,
-//   legacyHeaders: false,
-//   skip: (req, res) => {
-//     // Skip rate limiting for OPTIONS requests and health check
-//     return req.method === 'OPTIONS' || req.url === '/api/health';
-//   }
-// });
-// Only apply rate limiting to API routes, not static files
-// app.use('/api/', limiter);
+// Rate limiting - Enabled for production
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: 900 // 15 minutes in seconds
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req, res) => {
+    // Skip rate limiting for OPTIONS requests and health check
+    return req.method === 'OPTIONS' || req.url === '/api/health';
+  }
+});
+// Apply rate limiting to all requests
+app.use(limiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -163,6 +157,7 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+// Use Render's PORT or default to 5000
 const PORT = process.env.PORT || 5000;
 
 // Initialize database and start server
@@ -185,7 +180,7 @@ const startServer = async () => {
     } catch (dbError) {
       console.warn('⚠️ Database connection failed, but server will continue running:');
       console.warn('   - Make sure MySQL server is running');
-      console.warn('   - Check database credentials in .env file');
+      console.warn('   - Check database credentials in .env file or Render environment variables');
       console.warn('   - Database features will not work until connected');
       console.warn(`   - Error: ${dbError.message}`);
     }

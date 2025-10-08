@@ -2,6 +2,7 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 // Database connection configuration
+// Use Render environment variables with fallbacks to .env values
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 3306,
@@ -10,8 +11,15 @@ const dbConfig = {
   database: process.env.DB_NAME || 'ecommerce_db',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  charset: 'utf8mb4_unicode_ci'
 };
+
+console.log('Database configuration:');
+console.log('- Host:', dbConfig.host);
+console.log('- Port:', dbConfig.port);
+console.log('- Database:', dbConfig.database);
+console.log('- User:', dbConfig.user ? 'Set' : 'Not set');
 
 // Create connection pool
 const pool = mysql.createPool(dbConfig);
@@ -29,18 +37,28 @@ const initialPool = mysql.createPool({
 
 // Test database connection
 const testConnection = async () => {
-  // First, connect without database to create it if needed
-  const initialConnection = await initialPool.getConnection();
-  
-  // Create database if it doesn't exist (use query instead of execute)
-  await initialConnection.query(`CREATE DATABASE IF NOT EXISTS ${dbConfig.database}`);
-  console.log(`✅ Database '${dbConfig.database}' ready`);
-  initialConnection.release();
-  
-  // Now test connection to the specific database
-  const connection = await pool.getConnection();
-  console.log('✅ Database connected successfully');
-  connection.release();
+  try {
+    console.log('Attempting to connect to database...');
+    
+    // First, connect without database to create it if needed
+    const initialConnection = await initialPool.getConnection();
+    console.log('✅ Initial connection established');
+    
+    // Create database if it doesn't exist (use query instead of execute)
+    await initialConnection.query(`CREATE DATABASE IF NOT EXISTS ?? CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, [dbConfig.database]);
+    console.log(`✅ Database '${dbConfig.database}' ready`);
+    initialConnection.release();
+    
+    // Now test connection to the specific database
+    const connection = await pool.getConnection();
+    console.log('✅ Database connected successfully');
+    connection.release();
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    throw error;
+  }
 };
 
 // Initialize database tables
@@ -49,7 +67,7 @@ const initializeDatabase = async () => {
     const connection = await pool.getConnection();
 
     // Use the database (use query instead of execute for USE command)
-    await connection.query(`USE ${dbConfig.database}`);
+    await connection.query(`USE ??`, [dbConfig.database]);
 
     // Create Categories table
     await connection.execute(`
@@ -59,7 +77,7 @@ const initializeDatabase = async () => {
         description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
     // Create Users table
@@ -74,7 +92,7 @@ const initializeDatabase = async () => {
         address TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
     // Create Products table
@@ -93,7 +111,7 @@ const initializeDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
     // Create Product Images table for multiple images
@@ -105,7 +123,52 @@ const initializeDatabase = async () => {
         is_primary BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create Cart table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS cart (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        product_id INT NOT NULL,
+        quantity INT NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create Orders table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        total_amount DECIMAL(10, 2) NOT NULL,
+        status ENUM('pending', 'processing', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending',
+        shipping_address TEXT NOT NULL,
+        payment_method VARCHAR(50) NOT NULL,
+        payment_status ENUM('pending', 'completed', 'failed', 'refunded') DEFAULT 'pending',
+        transaction_id VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create Order Items table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS order_items (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        order_id INT NOT NULL,
+        product_id INT NOT NULL,
+        quantity INT NOT NULL,
+        price DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
     // Add sales_count column if it doesn't exist
