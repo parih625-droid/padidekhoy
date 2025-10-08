@@ -12,7 +12,10 @@ const dbConfig = {
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  charset: 'utf8mb4_unicode_ci'
+  charset: 'utf8mb4_unicode_ci',
+  connectTimeout: 30000, // 30 seconds
+  acquireTimeout: 30000, // 30 seconds
+  timeout: 30000 // 30 seconds
 };
 
 console.log('Database configuration:');
@@ -32,7 +35,10 @@ const initialPool = mysql.createPool({
   password: process.env.DB_PASSWORD || '',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  connectTimeout: 30000, // 30 seconds
+  acquireTimeout: 30000, // 30 seconds
+  timeout: 30000 // 30 seconds
 });
 
 // Test database connection
@@ -57,6 +63,9 @@ const testConnection = async () => {
     return true;
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error errno:', error.errno);
+    console.error('Error syscall:', error.syscall);
     throw error;
   }
 };
