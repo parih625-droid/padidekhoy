@@ -12,6 +12,7 @@
     "test-login": "node test-login.js",
     "test-db": "node test-db-connection.js",
     "test-render": "node test-render-config.js",
+    "test-env": "node test-env.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

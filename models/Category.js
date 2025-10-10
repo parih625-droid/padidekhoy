@@ -21,7 +21,7 @@ const categorySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
-categorySchema.index({ name: 1 });
+// Remove manual index declaration since unique: true already creates an index
+// categorySchema.index({ name: 1 }); // This line was causing duplicate index warning
 
 module.exports = mongoose.model('Category', categorySchema);

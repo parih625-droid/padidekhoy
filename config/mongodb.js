@@ -5,7 +5,16 @@ require('dotenv').config();
 const connectDB = async () => {
   try {
     console.log('Connecting to MongoDB...');
-    console.log('Connection string:', process.env.DB_CONNECTION_STRING ? 'Set' : 'Not set');
+    console.log('DB_CONNECTION_STRING:', process.env.DB_CONNECTION_STRING ? 'Set' : 'Not set');
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+    
+    // Check if connection string is provided
+    if (!process.env.DB_CONNECTION_STRING) {
+      console.error('❌ DB_CONNECTION_STRING environment variable is not set');
+      console.error('Please set DB_CONNECTION_STRING in your Render environment variables');
+      console.log('⚠️ Database connection failed, but server will continue to start');
+      return;
+    }
     
     // MongoDB connection options for Atlas
     const options = {
@@ -20,6 +29,7 @@ const connectDB = async () => {
     return conn;
   } catch (error) {
     console.error('❌ MongoDB connection error:', error.message);
+    console.error('Error stack:', error.stack);
     // Don't exit the process, let the application continue to start
     // This allows health checks to work even when database is unavailable
     console.log('⚠️ Database connection failed, but server will continue to start');

@@ -9,10 +9,23 @@ const connectDB = require('./config/mongodb');
 // Load environment variables
 dotenv.config({ path: __dirname + '/.env' });
 console.log('Environment variables loaded:');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('PORT:', process.env.PORT);
+console.log('NODE_ENV:', process.env.NODE_ENV || 'Not set');
+console.log('PORT:', process.env.PORT || 'Not set (defaulting to 5000)');
 console.log('DB_CONNECTION_STRING:', process.env.DB_CONNECTION_STRING ? 'Set' : 'Not set');
 console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Loaded' : 'Not loaded');
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL || 'Not set');
+
+// Validate required environment variables
+const requiredEnvVars = ['DB_CONNECTION_STRING', 'JWT_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.log('\n⚠️  Warning: Missing required environment variables:');
+  missingEnvVars.forEach(varName => {
+    console.log(`   - ${varName}`);
+  });
+  console.log('   Please set these variables in your Render environment settings.');
+}
 
 const app = express();
 
@@ -129,11 +142,27 @@ console.log('Cart routes mounted');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  // Check if required environment variables are set
+  const requiredEnvVars = ['DB_CONNECTION_STRING', 'JWT_SECRET'];
+  const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  
+  // Check database connection status
+  const dbConnected = mongoose.connection.readyState === 1;
+  
   res.json({ 
     status: 'OK', 
     message: 'E-commerce API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || 5000,
+    database: {
+      connected: dbConnected,
+      host: dbConnected ? mongoose.connection.host : null
+    },
+    configuration: {
+      missingEnvVars: missingEnvVars,
+      frontendUrl: process.env.FRONTEND_URL || null
+    }
   });
 });
 
@@ -214,6 +243,7 @@ app.use((req, res) => {
 
 // Use Render's PORT or default to 5000
 const PORT = process.env.PORT || 5000;
+console.log(`Using port: ${PORT}`);
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
@@ -228,6 +258,11 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('   - Make sure MongoDB is running');
     console.log('   - Update database connection string in .env');
     console.log('   - Frontend will run at http://localhost:5173');
+  }
+  
+  // Show warning if required environment variables are missing
+  if (missingEnvVars.length > 0) {
+    console.log('\n⚠️  Warning: Application may not function correctly due to missing environment variables');
   }
 });
 

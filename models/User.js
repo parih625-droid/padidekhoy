@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
-userSchema.index({ email: 1 });
+// Remove manual index declaration since unique: true already creates an index
+// userSchema.index({ email: 1 }); // This line was causing duplicate index warning
 
 module.exports = mongoose.model('User', userSchema);
