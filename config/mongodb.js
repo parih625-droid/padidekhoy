@@ -16,10 +16,18 @@ const connectDB = async () => {
       return;
     }
     
-    // MongoDB connection options for Atlas
+    // MongoDB connection options for Atlas - optimized for cloud deployments
     const options = {
       serverSelectionTimeoutMS: 30000, // Increase timeout for Atlas
       socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      connectTimeoutMS: 30000, // Connection timeout
+      maxPoolSize: 10, // Maintain a pool of connections
+      minPoolSize: 5, // Minimum connections to keep open
+      retryWrites: true, // Retry writes on failure
+      retryReads: true, // Retry reads on failure
+      // Handle connection issues better
+      heartbeatFrequencyMS: 10000, // Check connection every 10 seconds
+      serverSelectionTimeoutMS: 30000, // Give up after 30 seconds
     };
     
     const conn = await mongoose.connect(process.env.DB_CONNECTION_STRING, options);
@@ -43,10 +51,14 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', (err) => {
   console.error('❌ Mongoose connection error:', err.message);
+  // Attempt to reconnect after a delay
+  setTimeout(connectDB, 5000);
 });
 
 mongoose.connection.on('disconnected', () => {
   console.log('⚠️ Mongoose disconnected');
+  // Attempt to reconnect after a delay
+  setTimeout(connectDB, 5000);
 });
 
 // Handle initial connection error

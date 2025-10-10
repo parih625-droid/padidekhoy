@@ -148,17 +148,21 @@ app.get('/api/health', (req, res) => {
   
   // Check database connection status
   const dbConnected = mongoose.connection.readyState === 1;
+  const dbConnectionStatus = {
+    readyState: mongoose.connection.readyState,
+    readyStateDescription: getConnectionStateDescription(mongoose.connection.readyState),
+    host: dbConnected ? mongoose.connection.host : null,
+    name: dbConnected ? mongoose.connection.name : null
+  };
   
   res.json({ 
     status: 'OK', 
     message: 'E-commerce API is running',
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
     port: process.env.PORT || 5000,
-    database: {
-      connected: dbConnected,
-      host: dbConnected ? mongoose.connection.host : null
-    },
+    database: dbConnectionStatus,
     configuration: {
       missingEnvVars: missingEnvVars,
       frontendUrl: process.env.FRONTEND_URL || null
@@ -166,9 +170,31 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Database connection test endpoint
+// Helper function to describe connection states
+function getConnectionStateDescription(state) {
+  switch(state) {
+    case 0: return 'disconnected';
+    case 1: return 'connected';
+    case 2: return 'connecting';
+    case 3: return 'disconnecting';
+    default: return 'unknown';
+  }
+}
+
+// Enhanced database connection test endpoint
 app.get('/api/test-db', async (req, res) => {
   try {
+    // Check connection state first
+    const connectionState = mongoose.connection.readyState;
+    if (connectionState !== 1) {
+      return res.status(503).json({ 
+        status: 'error', 
+        message: 'Database not connected',
+        connectionState: getConnectionStateDescription(connectionState),
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     // Simple test to check if we can access the database
     const User = require('./models/User');
     const count = await User.countDocuments();
@@ -176,6 +202,7 @@ app.get('/api/test-db', async (req, res) => {
       status: 'success', 
       message: 'Database connection is working properly',
       userCount: count,
+      connectionState: getConnectionStateDescription(connectionState),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -184,6 +211,7 @@ app.get('/api/test-db', async (req, res) => {
       status: 'error', 
       message: 'Database connection failed',
       error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       timestamp: new Date().toISOString()
     });
   }
