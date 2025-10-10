@@ -1,118 +1,262 @@
-const { validationResult } = require('express-validator');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const { formatDocuments, formatDocument } = require('../utils/formatResponse');
 
 const getAllProducts = async (req, res) => {
   try {
-    const filters = {
-      category_id: req.query.category,
-      search: req.query.search,
-      min_price: req.query.min_price,
-      max_price: req.query.max_price,
-      is_amazing_offer: req.query.is_amazing_offer,
-      limit: parseInt(req.query.limit) || 20,
-      offset: parseInt(req.query.offset) || 0
-    };
+    const { 
+      category_id, 
+      search, 
+      min_price, 
+      max_price, 
+      is_amazing_offer,
+      limit = 20,
+      offset = 0
+    } = req.query;
 
-    const products = await Product.getAll(filters);
-    
-    res.json({
-      products,
-      count: products.length,
-      filters
-    });
+    console.log('getAllProducts called with params:', { category_id, search, min_price, max_price, is_amazing_offer });
+
+    // Build filter object
+    const filter = { isActive: true };
+
+    if (category_id) {
+      console.log('Filtering by category_id:', category_id, 'type:', typeof category_id);
+      // Validate category ID format
+      if (category_id && !category_id.match(/^[0-9a-fA-F]{24}$/)) {
+        console.log('Invalid category ID format:', category_id);
+        return res.status(400).json({ message: 'Invalid category ID format' });
+      }
+      filter.category = category_id;
+    }
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (min_price || max_price) {
+      filter.price = {};
+      if (min_price) filter.price.$gte = parseFloat(min_price);
+      if (max_price) filter.price.$lte = parseFloat(max_price);
+    }
+
+    if (is_amazing_offer !== undefined) {
+      filter.isAmazingOffer = is_amazing_offer === 'true';
+    }
+
+    // Convert limit and offset to numbers
+    const limitNum = Math.min(parseInt(limit) || 20, 50);
+    const offsetNum = parseInt(offset) || 0;
+
+    console.log('Final filter object:', filter);
+
+    const products = await Product.find(filter)
+      .populate('category', 'name')
+      .sort({ createdAt: -1 })
+      .skip(offsetNum)
+      .limit(limitNum);
+
+    // Format products for frontend compatibility
+    const formattedProducts = formatDocuments(products);
+
+    res.json({ products: formattedProducts });
   } catch (error) {
     console.error('Get products error:', error);
     res.status(500).json({ message: 'Failed to fetch products' });
   }
 };
 
-const getProductById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const product = await Product.findById(id);
-    
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-    
-    res.json({ product });
-  } catch (error) {
-    console.error('Get product error:', error);
-    res.status(500).json({ message: 'Failed to fetch product' });
-  }
-};
-
 const getFeaturedProducts = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 8;
-    const products = await Product.getFeatured(limit);
+    const limit = Math.min(parseInt(req.query.limit) || 8, 50);
     
-    res.json({ products });
+    const products = await Product.find({ isActive: true })
+      .populate('category', 'name')
+      .sort({ createdAt: -1 })
+      .limit(limit);
+
+    // Format products for frontend compatibility
+    const formattedProducts = formatDocuments(products);
+
+    res.json({ products: formattedProducts });
   } catch (error) {
     console.error('Get featured products error:', error);
     res.status(500).json({ message: 'Failed to fetch featured products' });
   }
 };
 
+const getNewestProducts = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    
+    const products = await Product.find({ isActive: true })
+      .populate('category', 'name')
+      .sort({ createdAt: -1 })
+      .limit(limit);
+
+    // Format products for frontend compatibility
+    const formattedProducts = formatDocuments(products);
+
+    res.json({ products: formattedProducts });
+  } catch (error) {
+    console.error('Get newest products error:', error);
+    res.status(500).json({ message: 'Failed to fetch newest products' });
+  }
+};
+
+const getBestSellingProducts = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const offset = parseInt(req.query.offset) || 0;
+    
+    const products = await Product.find({ isActive: true })
+      .populate('category', 'name')
+      .sort({ salesCount: -1 })
+      .skip(offset)
+      .limit(limit);
+
+    // Format products for frontend compatibility
+    const formattedProducts = formatDocuments(products);
+
+    res.json({ products: formattedProducts });
+  } catch (error) {
+    console.error('Get best selling products error:', error);
+    res.status(500).json({ message: 'Failed to fetch best selling products' });
+  }
+};
+
+const searchProducts = async (req, res) => {
+  try {
+    const { q, limit = 20 } = req.query;
+    
+    if (!q) {
+      return res.status(400).json({ message: 'Search query is required' });
+    }
+
+    const limitNum = Math.min(parseInt(limit) || 20, 50);
+
+    const products = await Product.find({
+      $text: { $search: q },
+      isActive: true
+    })
+    .populate('category', 'name')
+    .limit(limitNum);
+
+    // Format products for frontend compatibility
+    const formattedProducts = formatDocuments(products);
+
+    res.json({ products: formattedProducts });
+  } catch (error) {
+    console.error('Search products error:', error);
+    res.status(500).json({ message: 'Failed to search products' });
+  }
+};
+
 const getProductsByCategory = async (req, res) => {
   try {
     const { categoryId } = req.params;
-    const limit = parseInt(req.query.limit) || 20;
-    
-    const products = await Product.getByCategory(categoryId, limit);
-    
-    res.json({ products });
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+
+    // Validate category ID
+    if (!categoryId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid category ID' });
+    }
+
+    const products = await Product.find({
+      category: categoryId,
+      isActive: true
+    })
+    .populate('category', 'name')
+    .sort({ createdAt: -1 })
+    .limit(limit);
+
+    // Format products for frontend compatibility
+    const formattedProducts = formatDocuments(products);
+
+    res.json({ products: formattedProducts });
   } catch (error) {
     console.error('Get products by category error:', error);
     res.status(500).json({ message: 'Failed to fetch products by category' });
   }
 };
 
+const getProductById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate product ID
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid product ID' });
+    }
+
+    const product = await Product.findById(id)
+      .populate('category', 'name');
+
+    if (!product || !product.isActive) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    // Format product for frontend compatibility
+    const formattedProduct = formatDocument(product);
+
+    res.json({ product: formattedProduct });
+  } catch (error) {
+    console.error('Get product error:', error);
+    res.status(500).json({ message: 'Failed to fetch product' });
+  }
+};
+
 const createProduct = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const { name, description, price, category_id, stock_quantity, is_amazing_offer } = req.body;
-    let image_url = null;
-    let additionalImages = [];
-
-    // Handle single file upload (primary image)
-    if (req.file) {
-      image_url = `/uploads/${req.file.filename}`;
-    }
-
-    // Handle multiple file uploads
-    if (req.files && req.files.length > 0) {
-      additionalImages = req.files.map(file => `/uploads/${file.filename}`);
-    }
-
-    const productId = await Product.create({
+    const {
       name,
       description,
       price,
-      image_url,
       category_id,
       stock_quantity,
-      is_amazing_offer: is_amazing_offer === 'true' || is_amazing_offer === true // Convert to boolean
-    });
+      is_amazing_offer
+    } = req.body;
 
-    // Add additional images if any
-    if (additionalImages.length > 0) {
-      await Product.addImages(productId, additionalImages);
+    // Validate category ID
+    if (!category_id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid category ID' });
     }
 
-    const product = await Product.findById(productId);
-    
+    // Check if category exists
+    const category = await Category.findById(category_id);
+    if (!category) {
+      return res.status(400).json({ message: 'Category not found' });
+    }
+
+    // Handle image uploads
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      images = req.files.map(file => `/uploads/${file.filename}`);
+    }
+
+    const product = new Product({
+      name,
+      description,
+      price: parseFloat(price),
+      images,
+      category: category_id,
+      stockQuantity: parseInt(stock_quantity) || 0,
+      isAmazingOffer: is_amazing_offer === 'true'
+    });
+
+    await product.save();
+
+    // Populate category info
+    await product.populate('category', 'name');
+
+    // Format product for frontend compatibility
+    const formattedProduct = formatDocument(product);
+
     res.status(201).json({
       message: 'Product created successfully',
-      product
+      product: formattedProduct
     });
   } catch (error) {
     console.error('Create product error:', error);
@@ -122,43 +266,67 @@ const createProduct = async (req, res) => {
 
 const updateProduct = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
     const { id } = req.params;
-    const updateData = { ...req.body };
+    const {
+      name,
+      description,
+      price,
+      category_id,
+      stock_quantity,
+      is_amazing_offer,
+      is_active
+    } = req.body;
 
-    // Convert is_amazing_offer to boolean if present
-    if ('is_amazing_offer' in updateData) {
-      updateData.is_amazing_offer = updateData.is_amazing_offer === 'true' || updateData.is_amazing_offer === true;
+    // Validate product ID
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid product ID' });
     }
 
-    // Handle file upload
-    if (req.file) {
-      updateData.image_url = `/uploads/${req.file.filename}`;
+    // Validate category ID if provided
+    if (category_id && !category_id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid category ID' });
     }
 
-    const updated = await Product.update(id, updateData);
-    if (!updated) {
+    // Check if category exists (if provided)
+    if (category_id) {
+      const category = await Category.findById(category_id);
+      if (!category) {
+        return res.status(400).json({ message: 'Category not found' });
+      }
+    }
+
+    // Build update object
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (price) updateData.price = parseFloat(price);
+    if (category_id) updateData.category = category_id;
+    if (stock_quantity !== undefined) updateData.stockQuantity = parseInt(stock_quantity);
+    if (is_amazing_offer !== undefined) updateData.isAmazingOffer = is_amazing_offer === 'true';
+    if (is_active !== undefined) updateData.isActive = is_active === 'true';
+
+    // Handle image uploads
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map(file => `/uploads/${file.filename}`);
+      updateData.images = newImages;
+    }
+
+    const product = await Product.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('category', 'name');
+
+    if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    // Handle additional images if uploaded
-    if (req.files && req.files.length > 0) {
-      const additionalImages = req.files.map(file => `/uploads/${file.filename}`);
-      await Product.addImages(id, additionalImages);
-    }
+    // Format product for frontend compatibility
+    const formattedProduct = formatDocument(product);
 
-    const product = await Product.findById(id);
-    
     res.json({
       message: 'Product updated successfully',
-      product
+      product: formattedProduct
     });
   } catch (error) {
     console.error('Update product error:', error);
@@ -169,12 +337,23 @@ const updateProduct = async (req, res) => {
 const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const deleted = await Product.delete(id);
-    if (!deleted) {
+
+    // Validate product ID
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid product ID' });
+    }
+
+    // Soft delete - set isActive to false
+    const product = await Product.findByIdAndUpdate(
+      id,
+      { isActive: false },
+      { new: true }
+    );
+
+    if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
-    
+
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
     console.error('Delete product error:', error);
@@ -182,66 +361,15 @@ const deleteProduct = async (req, res) => {
   }
 };
 
-const searchProducts = async (req, res) => {
-  try {
-    const { q } = req.query;
-    if (!q || q.trim().length < 2) {
-      return res.status(400).json({ message: 'Search query must be at least 2 characters long' });
-    }
-
-    const filters = {
-      search: q.trim(),
-      limit: parseInt(req.query.limit) || 20,
-      offset: parseInt(req.query.offset) || 0
-    };
-
-    const products = await Product.getAll(filters);
-    
-    res.json({
-      products,
-      query: q,
-      count: products.length
-    });
-  } catch (error) {
-    console.error('Search products error:', error);
-    res.status(500).json({ message: 'Failed to search products' });
-  }
-};
-
-const getBestSellingProducts = async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = parseInt(req.query.offset) || 0;
-    const products = await Product.getBestSelling(limit, offset);
-    
-    res.json({ products });
-  } catch (error) {
-    console.error('Get best selling products error:', error);
-    res.status(500).json({ message: 'Failed to fetch best selling products' });
-  }
-};
-
-const getNewestProducts = async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 10;
-    const products = await Product.getNewest(limit);
-    
-    res.json({ products });
-  } catch (error) {
-    console.error('Get newest products error:', error);
-    res.status(500).json({ message: 'Failed to fetch newest products' });
-  }
-};
-
 module.exports = {
   getAllProducts,
-  getProductById,
   getFeaturedProducts,
   getNewestProducts,
+  getBestSellingProducts,
+  searchProducts,
   getProductsByCategory,
+  getProductById,
   createProduct,
   updateProduct,
-  deleteProduct,
-  searchProducts,
-  getBestSellingProducts
+  deleteProduct
 };

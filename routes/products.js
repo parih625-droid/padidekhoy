@@ -1,10 +1,19 @@
 const express = require('express');
-const { body, param } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const productController = require('../controllers/productController');
 const auth = require('../middleware/auth');
 const { upload, handleMulterError } = require('../middleware/upload');
 
 const router = express.Router();
+
+// Validation middleware
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  next();
+};
 
 // Validation rules
 const productValidation = [
@@ -21,8 +30,9 @@ const productValidation = [
     .isFloat({ min: 0.01 })
     .withMessage('Price must be a positive number'),
   body('category_id')
-    .isInt({ min: 1 })
-    .withMessage('Category ID must be a positive integer'),
+    .isString()
+    .matches(/^[0-9a-fA-F]{24}$/)
+    .withMessage('Category ID must be a valid MongoDB ObjectId'),
   body('stock_quantity')
     .optional()
     .isInt({ min: 0 })
@@ -30,7 +40,8 @@ const productValidation = [
   body('is_amazing_offer')
     .optional()
     .isBoolean()
-    .withMessage('Amazing offer must be a boolean value')
+    .withMessage('Amazing offer must be a boolean value'),
+  validate
 ];
 
 const productUpdateValidation = [
@@ -50,8 +61,9 @@ const productUpdateValidation = [
     .withMessage('Price must be a positive number'),
   body('category_id')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('Category ID must be a positive integer'),
+    .isString()
+    .matches(/^[0-9a-fA-F]{24}$/)
+    .withMessage('Category ID must be a valid MongoDB ObjectId'),
   body('stock_quantity')
     .optional()
     .isInt({ min: 0 })
@@ -59,19 +71,24 @@ const productUpdateValidation = [
   body('is_amazing_offer')
     .optional()
     .isBoolean()
-    .withMessage('Amazing offer must be a boolean value')
+    .withMessage('Amazing offer must be a boolean value'),
+  validate
 ];
 
 const paramIdValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Product ID must be a positive integer')
+    .isString()
+    .matches(/^[0-9a-fA-F]{24}$/)
+    .withMessage('Product ID must be a valid MongoDB ObjectId'),
+  validate
 ];
 
 const paramCategoryIdValidation = [
   param('categoryId')
-    .isInt({ min: 1 })
-    .withMessage('Category ID must be a positive integer')
+    .isString()
+    .matches(/^[0-9a-fA-F]{24}$/)
+    .withMessage('Category ID must be a valid MongoDB ObjectId'),
+  validate
 ];
 
 // Public routes

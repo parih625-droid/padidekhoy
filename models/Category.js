@@ -1,49 +1,27 @@
-const { pool } = require('../config/database');
+const mongoose = require('mongoose');
 
-class Category {
-  static async create(categoryData) {
-    const { name, description } = categoryData;
-    const [result] = await pool.execute(
-      'INSERT INTO categories (name, description) VALUES (?, ?)',
-      [name, description]
-    );
-    return result.insertId;
+const categorySchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    maxlength: 100
+  },
+  description: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+  image: {
+    type: String,
+    trim: true
   }
+}, {
+  timestamps: true
+});
 
-  static async findById(id) {
-    const [rows] = await pool.execute('SELECT * FROM categories WHERE id = ?', [id]);
-    return rows[0];
-  }
+// Indexes
+categorySchema.index({ name: 1 });
 
-  static async getAll() {
-    const [rows] = await pool.execute('SELECT * FROM categories ORDER BY name ASC');
-    return rows;
-  }
-
-  static async update(id, categoryData) {
-    const { name, description } = categoryData;
-    const [result] = await pool.execute(
-      'UPDATE categories SET name = ?, description = ? WHERE id = ?',
-      [name, description, id]
-    );
-    return result.affectedRows > 0;
-  }
-
-  static async delete(id) {
-    const [result] = await pool.execute('DELETE FROM categories WHERE id = ?', [id]);
-    return result.affectedRows > 0;
-  }
-
-  static async getWithProductCount() {
-    const [rows] = await pool.execute(`
-      SELECT c.*, COUNT(p.id) as product_count 
-      FROM categories c 
-      LEFT JOIN products p ON c.id = p.category_id AND p.is_active = TRUE 
-      GROUP BY c.id 
-      ORDER BY c.name ASC
-    `);
-    return rows;
-  }
-}
-
-module.exports = Category;
+module.exports = mongoose.model('Category', categorySchema);

@@ -6,6 +6,8 @@ const { authLimiter } = require('../middleware/securityMiddleware');
 
 const router = express.Router();
 
+console.log('=== AUTH ROUTES LOADING ===');
+
 // Apply rate limiting to authentication routes
 router.use('/login', authLimiter);
 router.use('/register', authLimiter);
@@ -82,5 +84,13 @@ router.put('/change-password', auth.authenticateToken, [
 
 // Verify token (protected route)
 router.get('/verify', auth.authenticateToken, authController.verifyToken);
+
+// Admin routes (protected and admin-only)
+router.get('/users', (req, res, next) => {
+  console.log('=== USERS ROUTE MIDDLEWARE HIT ===');
+  next();
+}, auth.authenticateToken, authController.getAllUsers);
+
+router.delete('/users/:id', auth.authenticateToken, authController.deleteUser);
 
 module.exports = router;

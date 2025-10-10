@@ -4,17 +4,20 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const { testConnection, initializeDatabase, insertSampleData, pool } = require('./config/database');
+const connectDB = require('./config/mongodb');
 
 // Load environment variables
 dotenv.config({ path: __dirname + '/.env' });
 console.log('Environment variables loaded:');
 console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT:', process.env.PORT);
-console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_CONNECTION_STRING:', process.env.DB_CONNECTION_STRING ? 'Set' : 'Not set');
 console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Loaded' : 'Not loaded');
 
 const app = express();
+
+// Connect to MongoDB
+connectDB();
 
 // Security middleware
 app.use(helmet({
@@ -23,8 +26,10 @@ app.use(helmet({
 
 // CORS configuration - Updated for Render deployment
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://padidekhoy.ir',
-  'http://padidekhoy.ir',
+  process.env.FRONTEND_URL || 'https://ecommerce-frontend.onrender.com',
+  'https://ecommerce-frontend.onrender.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
   // Add your actual frontend URL when you have it
 ];
 
@@ -124,36 +129,33 @@ console.log('Cart routes mounted');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'E-commerce API is running' });
+  res.json({ 
+    status: 'OK', 
+    message: 'E-commerce API is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Database connection test endpoint
 app.get('/api/test-db', async (req, res) => {
   try {
-    console.log('Database test endpoint hit');
-    
-    // Try to get a connection from the pool
-    const connection = await pool.getConnection();
-    console.log('✅ Database connection established');
-    
-    // Run a simple query
-    const [rows] = await connection.execute('SELECT 1 as test');
-    console.log('✅ Simple query executed');
-    
-    // Release the connection
-    connection.release();
-    
+    // Simple test to check if we can access the database
+    const User = require('./models/User');
+    const count = await User.countDocuments();
     res.json({ 
       status: 'success', 
       message: 'Database connection is working properly',
-      testResult: rows[0]
+      userCount: count,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     console.error('❌ Database test failed:', error.message);
     res.status(500).json({ 
       status: 'error', 
       message: 'Database connection failed',
-      error: error.message
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -186,6 +188,12 @@ app.get('/api/test-orders', (req, res) => {
   res.json({ message: 'Test endpoint working' });
 });
 
+// Simple test endpoint to verify server is working
+app.get('/api/test', (req, res) => {
+  console.log('=== SIMPLE TEST ENDPOINT HIT ===');
+  res.json({ message: 'Server is working' });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -207,53 +215,20 @@ app.use((req, res) => {
 // Use Render's PORT or default to 5000
 const PORT = process.env.PORT || 5000;
 
-// Initialize database and start server
-const startServer = async () => {
-  try {
-    console.log('🚀 Starting E-commerce Server...');
-    
-    // Try to connect to database (non-blocking)
-    try {
-      console.log('📊 Testing database connection...');
-      await testConnection();
-      
-      console.log('🗄️ Initializing database tables...');
-      await initializeDatabase();
-      
-      console.log('📝 Inserting sample data...');
-      await insertSampleData();
-      
-      console.log('✅ Database setup completed successfully!');
-    } catch (dbError) {
-      console.warn('⚠️ Database connection failed, but server will continue running:');
-      console.warn('   - Make sure MySQL server is running');
-      console.warn('   - Check database credentials in .env file or Render environment variables');
-      console.warn('   - Database features will not work until connected');
-      console.warn(`   - Error: ${dbError.message}`);
-    }
-    
-    // Start server regardless of database status
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log('\n' + '='.repeat(50));
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📱 Health check: http://localhost:${PORT}/api/health`);
-      console.log(`📊 API Documentation: http://localhost:${PORT}/api`);
-      console.log('='.repeat(50));
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('\n💡 Development Tips:');
-        console.log('   - Install and start MySQL server');
-        console.log('   - Update database credentials in backend/.env');
-        console.log('   - Frontend will run at http://localhost:5173');
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('\n' + '='.repeat(50));
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📱 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`📊 API Documentation: http://localhost:${PORT}/api`);
+  console.log('='.repeat(50));
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('\n💡 Development Tips:');
+    console.log('   - Make sure MongoDB is running');
+    console.log('   - Update database connection string in .env');
+    console.log('   - Frontend will run at http://localhost:5173');
   }
-};
-
-startServer();
+});
 
 module.exports = app;

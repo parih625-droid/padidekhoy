@@ -44,7 +44,7 @@ const register = async (req, res) => {
     const { name, email, password, phone, address } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findByEmail(email);
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
@@ -54,24 +54,33 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Create user
-    const userId = await User.create({
+    const user = new User({
       name,
-      email,
+      email: email.toLowerCase(),
       password: hashedPassword,
       phone,
       address
     });
 
-    // Generate token
-    const token = generateToken(userId);
+    await user.save();
 
-    // Get user data (without password)
-    const user = await User.findById(userId);
+    // Generate token
+    const token = generateToken(user._id);
+
+    // Remove password from user object and format for frontend
+    const userObj = user.toObject();
+    delete userObj.password;
+    const formattedUser = {
+      ...userObj,
+      id: userObj._id.toString(),
+      created_at: userObj.createdAt,
+      updated_at: userObj.updatedAt
+    };
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user
+      user: formattedUser
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -98,7 +107,7 @@ const login = async (req, res) => {
     console.log('Login attempt for email:', email);
 
     // Find user by email
-    const user = await User.findByEmail(email);
+    const user = await User.findOne({ email: email.toLowerCase() });
     console.log('User found:', user);
     if (!user) {
       console.log('User not found for email:', email);
@@ -115,16 +124,23 @@ const login = async (req, res) => {
     }
 
     // Generate token
-    console.log('Generating token for user:', user.id);
-    const token = generateToken(user.id);
+    console.log('Generating token for user:', user._id);
+    const token = generateToken(user._id);
 
-    // Remove password from user object
-    const { password: _, ...userWithoutPassword } = user;
+    // Remove password from user object and format for frontend
+    const userObj = user.toObject();
+    delete userObj.password;
+    const formattedUser = {
+      ...userObj,
+      id: userObj._id.toString(),
+      created_at: userObj.createdAt,
+      updated_at: userObj.updatedAt
+    };
 
     res.json({
       message: 'Login successful',
       token,
-      user: userWithoutPassword
+      user: formattedUser
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -134,12 +150,21 @@ const login = async (req, res) => {
 
 const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select('-password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+    
+    // Format user data for frontend compatibility
+    const userObj = user.toObject();
+    const formattedUser = {
+      ...userObj,
+      id: userObj._id.toString(),
+      created_at: userObj.createdAt,
+      updated_at: userObj.updatedAt
+    };
 
-    res.json({ user });
+    res.json({ user: formattedUser });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ message: 'Failed to get profile' });
@@ -164,15 +189,28 @@ const updateProfile = async (req, res) => {
     if (phone) updateData.phone = phone;
     if (address) updateData.address = address;
 
-    const updated = await User.update(userId, updateData);
-    if (!updated) {
+    const user = await User.findByIdAndUpdate(
+      userId,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+    
+    // Format user data for frontend compatibility
+    const userObj = user.toObject();
+    const formattedUser = {
+      ...userObj,
+      id: userObj._id.toString(),
+      created_at: userObj.createdAt,
+      updated_at: userObj.updatedAt
+    };
 
-    const user = await User.findById(userId);
     res.json({
       message: 'Profile updated successfully',
-      user
+      user: formattedUser
     });
   } catch (error) {
     console.error('Update profile error:', error);
@@ -194,7 +232,7 @@ const changePassword = async (req, res) => {
     const userId = req.user.id;
 
     // Get user with password
-    const user = await User.findByEmail(req.user.email);
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -210,7 +248,8 @@ const changePassword = async (req, res) => {
     const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
     // Update password
-    await User.update(userId, { password: hashedNewPassword });
+    user.password = hashedNewPassword;
+    await user.save();
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
@@ -222,10 +261,23 @@ const changePassword = async (req, res) => {
 const verifyToken = async (req, res) => {
   try {
     // Token is already verified by middleware
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Format user data for frontend compatibility
+    const userObj = user.toObject();
+    const formattedUser = {
+      ...userObj,
+      id: userObj._id.toString(),
+      created_at: userObj.createdAt,
+      updated_at: userObj.updatedAt
+    };
+    
     res.json({
       valid: true,
-      user
+      user: formattedUser
     });
   } catch (error) {
     res.status(401).json({
@@ -235,11 +287,80 @@ const verifyToken = async (req, res) => {
   }
 };
 
+// Admin function to get all users
+const getAllUsers = async (req, res) => {
+  try {
+    // Check if user is admin
+    const currentUser = await User.findById(req.user._id);
+    if (!currentUser || currentUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admins only.' });
+    }
+
+    // Get all users except passwords
+    const users = await User.find().select('-password').sort({ createdAt: -1 });
+    
+    // Format users for frontend compatibility
+    const formattedUsers = users.map(user => {
+      const userObj = user.toObject();
+      return {
+        ...userObj,
+        id: userObj._id.toString(),
+        created_at: userObj.createdAt,
+        updated_at: userObj.updatedAt
+      };
+    });
+    
+    res.json({ users: formattedUsers });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+};
+
+// Admin function to delete a user
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if user is admin
+    const currentUser = await User.findById(req.user._id);
+    if (!currentUser || currentUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admins only.' });
+    }
+    
+    // Prevent admin from deleting themselves
+    if (id === currentUser._id.toString()) {
+      return res.status(400).json({ message: 'You cannot delete yourself' });
+    }
+    
+    // Check if user exists and is not an admin
+    const userToDelete = await User.findById(id);
+    if (!userToDelete) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Prevent deletion of other admins
+    if (userToDelete.role === 'admin') {
+      return res.status(400).json({ message: 'Cannot delete admin users' });
+    }
+    
+    // Delete the user
+    await User.findByIdAndDelete(id);
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ message: 'Failed to delete user' });
+  }
+};
+
 module.exports = {
   register,
   login,
   getProfile,
   updateProfile,
   changePassword,
-  verifyToken
+  verifyToken,
+  getAllUsers,
+  deleteUser
 };
