@@ -16,6 +16,13 @@ const connectDB = async () => {
       return;
     }
     
+    // Log connection string details (without sensitive information)
+    const connectionStringParts = process.env.DB_CONNECTION_STRING.split('@');
+    if (connectionStringParts.length > 1) {
+      const hostAndDb = connectionStringParts[1];
+      console.log('MongoDB Host and Database:', hostAndDb);
+    }
+    
     // MongoDB connection options for Atlas - optimized for cloud deployments
     const options = {
       serverSelectionTimeoutMS: 30000, // Increase timeout for Atlas
@@ -30,6 +37,12 @@ const connectDB = async () => {
       serverSelectionTimeoutMS: 30000, // Give up after 30 seconds
     };
     
+    console.log('Attempting MongoDB connection with options:', {
+      serverSelectionTimeoutMS: options.serverSelectionTimeoutMS,
+      socketTimeoutMS: options.socketTimeoutMS,
+      connectTimeoutMS: options.connectTimeoutMS
+    });
+    
     const conn = await mongoose.connect(process.env.DB_CONNECTION_STRING, options);
     
     console.log(`✅ MongoDB connected: ${conn.connection.host}`);
@@ -38,6 +51,8 @@ const connectDB = async () => {
   } catch (error) {
     console.error('❌ MongoDB connection error:', error.message);
     console.error('Error stack:', error.stack);
+    console.error('Error name:', error.name);
+    console.error('Error code:', error.code);
     // Don't exit the process, let the application continue to start
     // This allows health checks to work even when database is unavailable
     console.log('⚠️ Database connection failed, but server will continue to start');
@@ -51,6 +66,7 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', (err) => {
   console.error('❌ Mongoose connection error:', err.message);
+  console.error('❌ Mongoose error code:', err.code);
   // Attempt to reconnect after a delay
   setTimeout(connectDB, 5000);
 });
@@ -68,6 +84,14 @@ mongoose.connection.on('error', (err) => {
 
 // Close connection when process ends
 process.on('SIGINT', async () => {
+  console.log('Received SIGINT, closing MongoDB connection...');
+  await mongoose.connection.close();
+  console.log('✅ Mongoose connection closed due to app termination');
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM, closing MongoDB connection...');
   await mongoose.connection.close();
   console.log('✅ Mongoose connection closed due to app termination');
   process.exit(0);

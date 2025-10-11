@@ -92,9 +92,10 @@ const limiter = rateLimit({
   legacyHeaders: false,
   skip: (req, res) => {
     // Skip rate limiting for OPTIONS requests and health check
-    return req.method === 'OPTIONS' || req.url === '/api/health';
+    return req.method === 'OPTIONS' || req.url === '/api/health' || req.url === '/api/test' || req.url === '/api/test-orders';
   }
 });
+
 // Apply rate limiting to all requests
 app.use(limiter);
 
@@ -253,7 +254,31 @@ app.get('/api/test', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('=== GLOBAL ERROR HANDLER ===');
+  console.error('Error stack:', err.stack);
+  console.error('Error message:', err.message);
+  console.error('Request URL:', req.url);
+  console.error('Request method:', req.method);
+  console.error('Request headers:', req.headers);
+  
+  // Handle specific error types
+  if (err.name === 'MongoError' || err.name === 'MongooseError') {
+    console.error('Database error:', err.message);
+    return res.status(500).json({ 
+      message: 'Database connection error', 
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error' 
+    });
+  }
+  
+  if (err.name === 'ValidationError') {
+    console.error('Validation error:', err.message);
+    return res.status(400).json({ 
+      message: 'Validation error', 
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Bad request' 
+    });
+  }
+  
+  // Default error response
   res.status(500).json({ 
     message: 'Something went wrong!', 
     error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error' 
@@ -266,6 +291,7 @@ app.use((req, res) => {
   console.log('Request URL:', req.url);
   console.log('Request method:', req.method);
   console.log('Full URL:', req.originalUrl);
+  console.log('Request headers:', req.headers);
   res.status(404).json({ message: 'Route not found' });
 });
 
@@ -289,9 +315,14 @@ app.listen(PORT, '0.0.0.0', () => {
   }
   
   // Show warning if required environment variables are missing
+  const requiredEnvVars = ['DB_CONNECTION_STRING', 'JWT_SECRET'];
+  const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
   if (missingEnvVars.length > 0) {
     console.log('\n⚠️  Warning: Application may not function correctly due to missing environment variables');
+    console.log('   Missing variables:', missingEnvVars.join(', '));
   }
+  
+  console.log('\n✅ Server startup completed');
 });
 
 module.exports = app;
