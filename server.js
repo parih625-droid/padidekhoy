@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const connectDB = require('./config/mongodb');
+const mongoose = require('mongoose');
 
 // Load environment variables
 dotenv.config({ path: __dirname + '/.env' });
@@ -80,24 +81,24 @@ app.use((req, res, next) => {
   }
 });
 
-// Rate limiting - Enabled for production
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: 900 // 15 minutes in seconds
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req, res) => {
-    // Skip rate limiting for OPTIONS requests and health check
-    return req.method === 'OPTIONS' || req.url === '/api/health' || req.url === '/api/test' || req.url === '/api/test-orders';
-  }
-});
+// Rate limiting - Disabled for local development
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 500, // limit each IP to 500 requests per windowMs
+//   message: {
+//     error: 'Too many requests from this IP, please try again later.',
+//     retryAfter: 900 // 15 minutes in seconds
+//   },
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   skip: (req, res) => {
+//     // Skip rate limiting for OPTIONS requests and health check
+//     return req.method === 'OPTIONS' || req.url === '/api/health' || req.url === '/api/test' || req.url === '/api/test-orders';
+//   }
+// });
 
 // Apply rate limiting to all requests
-app.use(limiter);
+// app.use(limiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
